@@ -337,6 +337,6 @@ internal class Program
         var config = builder.Build();
         BotData.Token = config["Bot:token"] ?? throw new NotImplementedException("No Token found for bot...");
         if (string.IsNullOrWhiteSpace(BotData.Token))
-            throw new NotImplementedException("Please provide your ElevenLabs API key in the appsettings.json file");
+            throw new NotImplementedException("Please provide your Discord Bot Token in the appsettings.json file");
     }
 }
