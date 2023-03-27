@@ -19,19 +19,21 @@ namespace ElevenLabsTTSDiscordBot
             fileIds = new Dictionary<ulong, int>();
         }
 
-        public async Task<string> GetVoiceFileAsync(string apiKey, ulong serverId, string voiceId, string text)
+        public async Task<string> GetVoiceFileAsync(string apiKey, ulong serverId, string voiceId, string text, double stability, double similarity_boost)
         {
             var history = await GetVoiceHistory(apiKey);
 
             if (history.Any(
                     h => h.text == text && 
-                    h.voice_id == voiceId))
+                    h.voice_id == voiceId &&
+                    h.settings.stability == stability &&
+                    h.settings.similarity_boost == similarity_boost))
             {
-                return await GetPreMadeSoundFile(apiKey, serverId, history.First(h => h.text == text && h.voice_id == voiceId).history_item_id);
+                return await GetPreMadeSoundFile(apiKey, serverId, history.First(h => h.text == text && h.voice_id == voiceId && h.settings.stability == stability && h.settings.similarity_boost == similarity_boost).history_item_id);
             }
             else
             {
-                return await GetVoiceStreamAsync(apiKey, serverId, voiceId, text);
+                return await GetVoiceStreamAsync(apiKey, serverId, voiceId, text, stability, similarity_boost);
             }
         }
 
@@ -53,7 +55,7 @@ namespace ElevenLabsTTSDiscordBot
             return obj?.history ?? new List<VoiceHistoryData>();
         }
 
-        private async Task<string> GetVoiceStreamAsync(string apiKey, ulong serverId, string voiceId, string text)
+        private async Task<string> GetVoiceStreamAsync(string apiKey, ulong serverId, string voiceId, string text, double stability, double similarity_boost)
         {
             HttpRequestMessage httpRequestMessage = new HttpRequestMessage()
             {
@@ -68,8 +70,8 @@ namespace ElevenLabsTTSDiscordBot
                     text = text,
                     voice_settings = new
                     {
-                        stability = 0.75,
-                        similarity_boost = 0.75
+                        stability = stability,
+                        similarity_boost = similarity_boost
                     }
                 }), UTF8Encoding.UTF8, "application/json")
             };
@@ -135,7 +137,7 @@ namespace ElevenLabsTTSDiscordBot
                 };
                 HttpResponseMessage response = await _http.SendAsync(httpRequestMessage);
                 var obj = JsonSerializer.Deserialize<Voices>(await response.Content.ReadAsStringAsync());
-                voicesToReturn.Add(apiKey, obj?.voices.Where(v => v.category == "cloned") ?? new List<VoiceObj>());
+                voicesToReturn.Add(apiKey, obj?.voices.Where(v => v.category != "premade") ?? new List<VoiceObj>());
             }
             
             return voicesToReturn;

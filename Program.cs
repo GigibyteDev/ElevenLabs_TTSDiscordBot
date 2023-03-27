@@ -5,7 +5,8 @@ using ElevenLabsTTSDiscordBot;
 using ElevenLabsTTSDiscordBot.DataModels;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Windows.Input;
 
 internal class Program
 {
@@ -89,7 +90,7 @@ internal class Program
         var serverConnectionData = serverConnectionDataCollection.GetServerConnection(command.GuildId);
         if (serverConnectionData == null)
         {
-            var guild = client.GetGuild(command.GuildId.Value);
+            var guild = client.GetGuild(command.GuildId!.Value);
             if (guild == null)
             {
                 await command.Channel.SendMessageAsync("Server could not be found.");
@@ -104,6 +105,7 @@ internal class Program
             await serverConnectionData.AddApiKey(apiKey);
         }
 
+        _ = Task.FromResult(serverConnectionDataCollection.AddAPIKeyToBackupFile(command.GuildId!.Value, apiKey));
         await command.Channel.SendMessageAsync("API key added successfully! Check / ai for new options.");
         await command.DeleteOriginalResponseAsync();
     }
@@ -126,7 +128,7 @@ internal class Program
         if (serverConnectionData != null)
         {
             await serverConnectionData.RemoveApiKey(apiKey);
-
+            _ = Task.FromResult(serverConnectionDataCollection.RemoveAPIKeyFromBackupFile(command.GuildId!.Value, apiKey));
             await command.Channel.SendMessageAsync("API key removed successfully! /ai has been updated");
             await command.DeleteOriginalResponseAsync();
         }
@@ -143,6 +145,7 @@ internal class Program
         
         if (await serverConnectionDataCollection.RemoveServerConnection(command.GuildId))
         {
+            _ = Task.FromResult(serverConnectionDataCollection.ClearAllAPIKeysFromFile(command.GuildId!.Value));
             await command.RespondAsync("All API keys have been wiped.");
         }
         else
@@ -204,10 +207,25 @@ internal class Program
 
     private async Task HandleTTSCommand(SocketSlashCommand command)
     {
-        string text = command.Data.Options.LastOrDefault()?.Value.ToString()?.Trim() ?? string.Empty;
         string voiceId = command.Data.Options.FirstOrDefault()?.Value.ToString()?.Trim() ?? string.Empty;
+        string text = command.Data.Options.ElementAt(1)?.Value.ToString()?.Trim() ?? string.Empty;
+
+        double stability = 0.75;
+        if (command.Data.Options.Any(o => o.Name == "stability"))
+        {
+            int stabilityInt = Convert.ToInt32(command.Data.Options.First(o => o.Name == "stability").Value);
+            if (stabilityInt >= 0 && stabilityInt <= 100)
+                stability = stabilityInt / 100.0;
+        }
+
         if (!string.IsNullOrEmpty(text) && !string.IsNullOrEmpty(voiceId))
         {
+            if (text.Count() > 750)
+            {
+                await command.RespondAsync($"Generated text is too long... Max character limit is set to 750 currently...");
+                return;
+            }
+
             var vcService = _serviceProvider.GetRequiredService<ServerConnectionDataCollection>()
                                             .GetServerConnection(command.GuildId);
 
@@ -218,7 +236,7 @@ internal class Program
             }
             else
             {
-                var _ = Task.FromResult(vcService.GenerateVoiceLine(voiceId, text, command.GuildId, command));
+                var _ = Task.FromResult(vcService.GenerateVoiceLine(voiceId, text, command.GuildId, stability, command));
                 await command.RespondAsync("Generating...");
             }
         }
@@ -289,10 +307,15 @@ internal class Program
         }
         catch(HttpException ex)
         {
-            var json = JsonConvert.SerializeObject(ex.Errors, Formatting.Indented);
+            var json = JsonSerializer.Serialize(ex.Errors);
             Console.WriteLine(json);
         }
 
+        HandleCreateProgramFileSystem();
+    }
+
+    private void HandleCreateProgramFileSystem()
+    {
         DirectoryInfo parentDi = new DirectoryInfo(BotData.VoiceFileLoc);
         if (parentDi.Exists)
             foreach (var di in parentDi.GetDirectories())
@@ -305,6 +328,16 @@ internal class Program
             }
         else
             Directory.CreateDirectory(BotData.VoiceFileLoc);
+
+        DirectoryInfo backupDi = new DirectoryInfo(BotData.APIKeyBackupFileLoc);
+        if (!backupDi.Exists)
+            backupDi.Create();
+
+        if (!File.Exists(BotData.APIKeyBackupFile))
+        {
+            string json = JsonSerializer.Serialize(new Dictionary<ulong, IEnumerable<string>>());
+            _ = Task.FromResult(File.WriteAllTextAsync(BotData.APIKeyBackupFile, json));
+        }
     }
 
     private Task Log(LogMessage msg)
@@ -332,11 +365,11 @@ internal class Program
     private static void BuildDataModels()
     {
         var builder = new ConfigurationBuilder()
-            .AddJsonFile($"appsettings.json", true, true);
+            .AddJsonFile($"appsettings.json", false, true);
         
         var config = builder.Build();
         BotData.Token = config["Bot:token"] ?? throw new NotImplementedException("No Token found for bot...");
         if (string.IsNullOrWhiteSpace(BotData.Token))
-            throw new NotImplementedException("Please provide your ElevenLabs API key in the appsettings.json file");
+            throw new NotImplementedException("Please provide your Discord Bot Token in the appsettings.json file");
     }
 }

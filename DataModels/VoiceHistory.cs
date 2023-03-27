@@ -17,5 +17,12 @@ namespace ElevenLabsTTSDiscordBot.DataModels
         public string voice_id { get; set; }
         public string voice_name { get; set; }
         public string text { get; set; }
+        public VoiceHistoryDataSettings settings { get; set; }
+    }
+
+    public class VoiceHistoryDataSettings
+    {
+        public double similarity_boost { get; set; }
+        public double stability { get; set; }
     }
 }

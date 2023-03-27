@@ -79,7 +79,14 @@ namespace ElevenLabsTTSDiscordBot
                 .WithDescription("The text to be read aloud.")
                 .WithRequired(true)
                 .WithType(ApplicationCommandOptionType.String)
-            );
+            )
+            .AddOption(new SlashCommandOptionBuilder()
+                .WithName("stability")
+                .WithDescription("Value 0-100. Lower = More expressive but less consistent. [Default: 75]")
+                .WithRequired(false)
+                .WithType(ApplicationCommandOptionType.Integer)
+                .WithMinLength(0)
+                .WithMaxLength(100));
             await _server.CreateApplicationCommandAsync(aiCommand.Build());
         }
 
@@ -106,7 +113,7 @@ namespace ElevenLabsTTSDiscordBot
             await Disconnect();
         }
 
-        public async Task GenerateVoiceLine(string voiceId, string voiceLine, ulong? serverId, SocketSlashCommand command)
+        public async Task GenerateVoiceLine(string voiceId, string voiceLine, ulong? serverId, double stability, SocketSlashCommand command)
         {
             if (!serverId.HasValue)
             {
@@ -125,7 +132,7 @@ namespace ElevenLabsTTSDiscordBot
             var apiKey = voices.Key;
             var voiceName = voices.Value.First(voice => voice.APIVoiceId == voiceId).VoiceName;
 
-            string filePath = await _ttsService.GetVoiceFileAsync(apiKey, serverId.Value, voiceId, voiceLine);
+            string filePath = await _ttsService.GetVoiceFileAsync(apiKey, serverId.Value, voiceId, voiceLine, stability, 0.75);
 
             QueueData data = new(voiceName, voiceLine, filePath, command.Channel);
 
@@ -178,24 +185,16 @@ namespace ElevenLabsTTSDiscordBot
 
         public async Task Connect(IVoiceChannel vc)
         {
-            try
-            {
-                this.vc = vc;
-                audioClient = await vc.ConnectAsync();
-                discord = audioClient.CreatePCMStream(AudioApplication.Voice);
-                filesToPlay.Clear();
-                var folder = new DirectoryInfo(BotData.VoiceFileLoc + _server.Id);
-                if (folder.Exists)
-                    foreach (var file in folder.GetFiles())
-                    {
-                        file.Delete();
-                    }
-            }
-            catch(Exception ex)
-            {
-
-            }
-            
+            this.vc = vc;
+            audioClient = await vc.ConnectAsync();
+            discord = audioClient.CreatePCMStream(AudioApplication.Voice);
+            filesToPlay.Clear();
+            var folder = new DirectoryInfo(BotData.VoiceFileLoc + _server.Id);
+            if (folder.Exists)
+                foreach (var file in folder.GetFiles())
+                {
+                    file.Delete();
+                }
         }
 
         public async Task Disconnect()
@@ -205,7 +204,10 @@ namespace ElevenLabsTTSDiscordBot
                 await vc.DisconnectAsync();
                 audioClient = null;
                 discord = null;
-                filesToPlay.Clear();
+                foreach (var queueItem in filesToPlay)
+                {
+                    await SendSoundFileAsReply(queueItem);
+                }
             }
         }
 
