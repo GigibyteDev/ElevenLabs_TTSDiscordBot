@@ -18,10 +18,6 @@ Before Running the project, ensure the following steps are completed:
       - Voice Permissions
         - Connect
         - Speak
-3. Download the zip file of .dll's for your system from this link: https://github.com/discord-net/Discord.Net/tree/dev/voice-natives
-4. Extract libopus.dll and libsodium.dll to your program's root folder (Probably bin/debug/net7.0/ (May need to be built once in debug mode))
-5. Change libopus.dll name to opus.dll
-6. Run the program, and add your ElevenLabs key to your server's bot instance with the /addkey command (requires admin priveledges)
-7. Use the generated /ai command to access your account's voices
-
-3/21/2023 NOTE: As of 3/15/2023, Discord has pushed a change to the voice connection process which breaks Discord .Net's voice functionality. Please pull Discord .Net dev branch locally and swap from the nuget version to the local version for the time being, until the change gets pushed to the nuget branch.
+3. Ensure FFMPEG is installed system-wide, or an ffmpeg executable is placed in the bin file of the project.
+4. Run the program, and add your ElevenLabs key to your server's bot instance with the /addkey command (requires admin priveledges)
+5. Use the generated /ai command to access your account's voices
